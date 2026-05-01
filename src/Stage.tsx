@@ -115,17 +115,7 @@ export default function Stage() {
         ctx.restore();
       };
 
-      // Dashed frame bounds outline (always visible — shows current PNG bounds)
-      {
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-        ctx.lineWidth = 1 * invScale;
-        ctx.setLineDash([5 * invScale, 4 * invScale]);
-        ctx.strokeRect(spriteX, spriteY, img.width, img.height);
-        ctx.setLineDash([]);
-        ctx.restore();
-        drawText(`${img.width}×${img.height}`, spriteX + 3, spriteY - 4, 'rgba(255,255,255,0.55)');
-      }
+      // (dashed frame outline + anchor crosshair are drawn in screen space below)
 
       // Committed hitbox
       if (s.showHitbox && frame.hitbox) {
@@ -165,29 +155,50 @@ export default function Stage() {
         drawText(`${r.x}, ${r.y}  ${r.w}×${r.h}`, hx + 3, hy - 4, '#fbbf24');
       }
 
-      // Anchor crosshair
+      // Reset transform for screen-space overlays — anchor + frame outline are pinned to viewport center.
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      const screenCx = W / 2;
+      const screenCy = H / 2;
+      const fW = img.width * s.viewScale;
+      const fH = img.height * s.viewScale;
+      const fX = screenCx - fW / 2;
+      const fY = screenCy - fH / 2;
+
+      // Dashed frame outline — always centered in viewport, sized to current PNG at current zoom.
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      ctx.strokeRect(fX, fY, fW, fH);
+      ctx.setLineDash([]);
+      ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillText(`${img.width}×${img.height}`, fX + 3, fY - 4);
+      ctx.restore();
+
+      // Anchor crosshair — always at viewport center.
       if (s.showAnchor) {
         const dragging = drag.kind === 'anchor' && drag.active;
         ctx.save();
         ctx.strokeStyle = dragging ? '#c4b5fd' : '#a78bfa';
-        ctx.lineWidth = (dragging ? 1.5 : 1) * invScale;
+        ctx.lineWidth = dragging ? 1.5 : 1;
         ctx.beginPath();
-        ctx.moveTo(cx - 12, cy); ctx.lineTo(cx + 12, cy);
-        ctx.moveTo(cx, cy - 12); ctx.lineTo(cx, cy + 12);
+        ctx.moveTo(screenCx - 12, screenCy); ctx.lineTo(screenCx + 12, screenCy);
+        ctx.moveTo(screenCx, screenCy - 12); ctx.lineTo(screenCx, screenCy + 12);
         ctx.stroke();
         ctx.fillStyle = dragging ? '#c4b5fd' : 'rgba(167,139,250,0.9)';
-        ctx.beginPath(); ctx.arc(cx, cy, (dragging ? 4 : 2.5) * invScale, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(screenCx, screenCy, dragging ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
         if (!dragging) {
           ctx.strokeStyle = 'rgba(167,139,250,0.25)';
-          ctx.lineWidth = 1 * invScale;
-          ctx.beginPath(); ctx.arc(cx, cy, ANCHOR_HIT_RADIUS_WORLD, 0, Math.PI * 2); ctx.stroke();
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(screenCx, screenCy, 14, 0, Math.PI * 2); ctx.stroke();
         }
+        ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+        ctx.fillStyle = dragging ? '#c4b5fd' : 'rgba(167,139,250,0.8)';
+        ctx.fillText(`${a.anchor.x.toFixed(2)}, ${a.anchor.y.toFixed(2)}`, screenCx + 15, screenCy - 4);
         ctx.restore();
-        drawText(`${a.anchor.x.toFixed(2)}, ${a.anchor.y.toFixed(2)}`, cx + 15, cy - 4, dragging ? '#c4b5fd' : 'rgba(167,139,250,0.8)');
       }
-
-      // Reset transform for screen-space overlays
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
 
       if (fx.flashRemainingMs > 0 && fx.flashTotalMs > 0) {
         const k = fx.flashRemainingMs / fx.flashTotalMs;
@@ -273,13 +284,13 @@ export default function Stage() {
     }
     if (e.button !== 0) return;
 
-    // Anchor grab takes priority
+    // Anchor grab — crosshair is at SCREEN center, so test in screen space.
     if (s.showAnchor) {
       const canvas = canvasRef.current!;
-      const cx = canvas.width / 2;
-      const cy = canvas.height / 2;
-      const dx = world.x - cx, dy = world.y - cy;
-      if (Math.sqrt(dx * dx + dy * dy) <= ANCHOR_HIT_RADIUS_WORLD) {
+      const sxC = canvas.width / 2;
+      const syC = canvas.height / 2;
+      const dx = screen.x - sxC, dy = screen.y - syC;
+      if (Math.sqrt(dx * dx + dy * dy) <= 14) {
         dragRef.current = { kind: 'anchor', active: true };
         return;
       }
@@ -309,16 +320,19 @@ export default function Stage() {
     const world = screenToWorld(screen.x, screen.y);
 
     if (drag.kind === 'anchor') {
+      // Anchor + dashed frame are fixed at screen center. Map screen pos to
+      // normalized anchor within the screen-centered dashed rectangle.
       const canvas = canvasRef.current!;
-      const W = canvas.width;
-      const H = canvas.height;
+      const W = canvas.width, H = canvas.height;
       const a = s.loaded.anim;
       const img = s.loaded.images[a.frames[s.currentFrame].src];
       if (!img) return;
-      const spriteX = W / 2 - img.width * a.anchor.x;
-      const spriteY = H / 2 - img.height * a.anchor.y;
-      const newAx = Math.max(0, Math.min(1, (world.x - spriteX) / img.width));
-      const newAy = Math.max(0, Math.min(1, (world.y - spriteY) / img.height));
+      const fW = img.width * s.viewScale;
+      const fH = img.height * s.viewScale;
+      const fX = W / 2 - fW / 2;
+      const fY = H / 2 - fH / 2;
+      const newAx = Math.max(0, Math.min(1, (screen.x - fX) / fW));
+      const newAy = Math.max(0, Math.min(1, (screen.y - fY) / fH));
       s.updateAnim({ anchor: { x: Math.round(newAx * 100) / 100, y: Math.round(newAy * 100) / 100 } });
       return;
     }
