@@ -40,4 +40,6 @@ export interface LoadedFolder {
   // FSA handle if available — for save-back
   dirHandle?: FileSystemDirectoryHandle;
   jsonHandle?: FileSystemFileHandle;
+  // true when anim was bootstrapped from PNGs — no anim.json existed yet
+  generated?: boolean;
 }

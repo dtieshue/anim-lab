@@ -108,6 +108,14 @@ export default function Inspector() {
         </Section>
       )}
 
+      {loaded.generated && (
+        <Section title="No anim.json found">
+          <p className="text-[11px] text-amber-300/90 leading-snug">
+            Frames were sorted alphabetically and assigned default timing. Set phases and durations, then <strong>Save anim.json</strong> to write it into the folder.
+          </p>
+        </Section>
+      )}
+
       <Section title="Export">
         <div className="flex gap-2">
           <button onClick={onSave} className="flex-1 bg-violet-500 hover:bg-violet-400 active:bg-violet-600 transition-colors rounded px-2 py-1.5 text-xs font-medium text-white">Save anim.json</button>

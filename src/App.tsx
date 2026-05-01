@@ -115,7 +115,9 @@ export default function App() {
             }`}
           >
             <div className="text-2xl font-medium mb-1.5">Drop a folder here</div>
-            <div className="text-sm text-neutral-400 mb-5">containing <code className="text-neutral-200">anim.json</code> and the PNG frames</div>
+            <div className="text-sm text-neutral-400 mb-5">
+              PNGs only, or PNGs + <code className="text-neutral-200">anim.json</code>
+            </div>
             <button onClick={handlePick} className="px-3.5 h-8 rounded-md bg-violet-500 hover:bg-violet-400 text-sm font-medium text-white transition-colors">
               Or pick a folder
             </button>

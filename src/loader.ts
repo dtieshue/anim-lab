@@ -1,4 +1,4 @@
-import type { Anim, LoadedFolder } from './types';
+import type { Anim, FrameDef, LoadedFolder } from './types';
 
 const LAST_FOLDER_KEY = 'anim-lab.lastHandle';
 
@@ -60,6 +60,18 @@ function validateAnim(o: any): asserts o is Anim {
   if (!o.events) o.events = {};
 }
 
+function defaultAnim(name: string, pngNames: string[]): Anim {
+  const sorted = [...pngNames].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return {
+    name,
+    fps: 24,
+    loop: false,
+    anchor: { x: 0.5, y: 1.0 },
+    frames: sorted.map((src): FrameDef => ({ src, duration: 1, phase: 'anticipation' })),
+    events: {},
+  };
+}
+
 function loadImage(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob);
@@ -82,11 +94,18 @@ export async function loadFromDirHandle(handle: FileSystemDirectoryHandle): Prom
       else if (name.toLowerCase().endsWith('.png')) fileEntries[name] = fh;
     }
   }
-  if (!jsonHandle) throw new Error('anim.json not found in folder');
+  let anim: Anim;
+  let generated = false;
 
-  const jsonFile = await jsonHandle.getFile();
-  const anim = JSON.parse(await jsonFile.text());
-  validateAnim(anim);
+  if (jsonHandle) {
+    const jsonFile = await jsonHandle.getFile();
+    anim = JSON.parse(await jsonFile.text());
+    validateAnim(anim);
+  } else {
+    if (Object.keys(fileEntries).length === 0) throw new Error('No PNGs found in folder');
+    anim = defaultAnim(handle.name, Object.keys(fileEntries));
+    generated = true;
+  }
 
   const images: Record<string, HTMLImageElement> = {};
   for (const f of anim.frames) {
@@ -95,7 +114,7 @@ export async function loadFromDirHandle(handle: FileSystemDirectoryHandle): Prom
     images[f.src] = await loadImage(await fh.getFile());
   }
 
-  return { name: handle.name, anim, images, dirHandle: handle, jsonHandle };
+  return { name: handle.name, anim, images, dirHandle: handle, jsonHandle: jsonHandle ?? undefined, generated };
 }
 
 // Fallback: <input webkitdirectory> or DataTransfer items
@@ -112,16 +131,24 @@ export async function loadFromFileList(files: File[]): Promise<LoadedFolder> {
     if (base === 'anim.json') jsonFile = f;
     else if (base.toLowerCase().endsWith('.png')) byName[base] = f;
   }
-  if (!jsonFile) throw new Error('anim.json not found');
+  let anim: Anim;
+  let generated = false;
 
-  const anim = JSON.parse(await jsonFile.text());
-  validateAnim(anim);
+  if (jsonFile) {
+    anim = JSON.parse(await jsonFile.text());
+    validateAnim(anim);
+  } else {
+    if (Object.keys(byName).length === 0) throw new Error('No PNGs found in folder');
+    anim = defaultAnim(folderName, Object.keys(byName));
+    generated = true;
+  }
+
   const images: Record<string, HTMLImageElement> = {};
   for (const f of anim.frames) {
     if (!byName[f.src]) throw new Error(`PNG not found: ${f.src}`);
     images[f.src] = await loadImage(byName[f.src]);
   }
-  return { name: folderName, anim, images };
+  return { name: folderName, anim, images, generated };
 }
 
 // DataTransferItemList (drag/drop) — use FSA if possible, else walk entries
