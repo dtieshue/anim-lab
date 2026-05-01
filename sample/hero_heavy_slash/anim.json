@@ -7,7 +7,7 @@
     { "src": "f00.png", "duration": 2, "phase": "anticipation" },
     { "src": "f01.png", "duration": 2, "phase": "anticipation" },
     { "src": "f02.png", "duration": 1, "phase": "startup" },
-    { "src": "f03.png", "duration": 2, "phase": "active", "event": "hit", "hitbox": { "x": 60, "y": -120, "w": 90, "h": 60 } },
+    { "src": "f03.png", "duration": 2, "phase": "active", "event": "hit", "hitbox": { "x": 80, "y": 60, "w": 90, "h": 50 } },
     { "src": "f04.png", "duration": 1, "phase": "impact" },
     { "src": "f05.png", "duration": 4, "phase": "recovery" }
   ],

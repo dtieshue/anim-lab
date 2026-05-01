@@ -77,6 +77,23 @@ export default function Inspector() {
             className="bg-neutral-900 ring-1 ring-neutral-800 rounded px-1.5 py-1 text-xs w-32 hover:ring-neutral-700 focus:ring-violet-500 focus:outline-none"
           />
         </Row>
+        <Row label="Hitbox">
+          {frame.hitbox ? (
+            <div className="flex items-center gap-2">
+              <span className="text-neutral-400 text-xs tabular-nums">
+                {frame.hitbox.x},{frame.hitbox.y} · {frame.hitbox.w}×{frame.hitbox.h}
+              </span>
+              <button
+                onClick={() => updateFrame(selectedFrame, { hitbox: undefined })}
+                className="text-[10px] text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-1.5 py-0.5 rounded transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          ) : (
+            <span className="text-neutral-600 text-xs">drag on canvas</span>
+          )}
+        </Row>
       </Section>
 
       {eventName && (

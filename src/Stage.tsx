@@ -2,13 +2,29 @@ import { useEffect, useRef } from 'react';
 import { useStore } from './store';
 import { makeFxState, usePlayback } from './playback';
 
+interface DragState {
+  active: boolean;
+  startX: number;
+  startY: number;
+  curX: number;
+  curY: number;
+}
+
+function rectFromDrag(d: DragState, spriteX: number, spriteY: number) {
+  const x = Math.round(Math.min(d.startX, d.curX) - spriteX);
+  const y = Math.round(Math.min(d.startY, d.curY) - spriteY);
+  const w = Math.round(Math.abs(d.curX - d.startX));
+  const h = Math.round(Math.abs(d.curY - d.startY));
+  return { x, y, w, h };
+}
+
 export default function Stage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fxRef = useRef(makeFxState());
+  const dragRef = useRef<DragState>({ active: false, startX: 0, startY: 0, curX: 0, curY: 0 });
   usePlayback(fxRef);
 
-  // Render loop: pulls all draw state from the store on each frame so we don't
-  // need to subscribe to individual fields here.
+  // Render loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -18,6 +34,7 @@ export default function Stage() {
     const draw = () => {
       const s = useStore.getState();
       const fx = fxRef.current;
+      const drag = dragRef.current;
       const a = s.loaded?.anim;
       const W = canvas.width;
       const H = canvas.height;
@@ -47,6 +64,8 @@ export default function Stage() {
 
       const cx = W / 2 + shakeX;
       const cy = H * 0.85 + shakeY;
+      const spriteX = cx - img.width * a.anchor.x;
+      const spriteY = cy - img.height * a.anchor.y;
 
       const drawFrame = (idx: number, alpha: number, tint?: string) => {
         const fr = a.frames[idx];
@@ -84,15 +103,52 @@ export default function Stage() {
         drawFrame(s.currentFrame + 1, 0.25, 'rgba(80, 220, 255, 0.9)');
       }
 
+      // Committed hitbox
       if (s.showHitbox && frame.hitbox) {
-        const x = cx - img.width * a.anchor.x + frame.hitbox.x;
-        const y = cy - img.height * a.anchor.y + frame.hitbox.y;
+        const hx = spriteX + frame.hitbox.x;
+        const hy = spriteY + frame.hitbox.y;
         ctx.save();
-        ctx.strokeStyle = '#ff4d6d';
-        ctx.lineWidth = 2;
-        ctx.fillStyle = 'rgba(255,77,109,0.25)';
-        ctx.fillRect(x, y, frame.hitbox.w, frame.hitbox.h);
-        ctx.strokeRect(x, y, frame.hitbox.w, frame.hitbox.h);
+        ctx.strokeStyle = '#f87171';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(248,113,113,0.18)';
+        ctx.fillRect(hx, hy, frame.hitbox.w, frame.hitbox.h);
+        ctx.strokeRect(hx, hy, frame.hitbox.w, frame.hitbox.h);
+        // corner handles
+        const cs = 5;
+        ctx.fillStyle = '#f87171';
+        for (const [hcx, hcy] of [
+          [hx, hy], [hx + frame.hitbox.w, hy],
+          [hx, hy + frame.hitbox.h], [hx + frame.hitbox.w, hy + frame.hitbox.h],
+        ] as [number, number][]) {
+          ctx.fillRect(hcx - cs / 2, hcy - cs / 2, cs, cs);
+        }
+        // label
+        ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+        ctx.fillStyle = '#f87171';
+        ctx.fillText(
+          `${frame.hitbox.x}, ${frame.hitbox.y}  ${frame.hitbox.w}×${frame.hitbox.h}`,
+          hx + 3, hy - 4
+        );
+        ctx.restore();
+      }
+
+      // In-progress drag preview
+      if (s.showHitbox && drag.active) {
+        const r = rectFromDrag(drag, spriteX, spriteY);
+        const hx = spriteX + r.x;
+        const hy = spriteY + r.y;
+        ctx.save();
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.fillStyle = 'rgba(251,191,36,0.15)';
+        ctx.fillRect(hx, hy, r.w, r.h);
+        ctx.strokeRect(hx, hy, r.w, r.h);
+        ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+        ctx.fillStyle = '#fbbf24';
+        ctx.setLineDash([]);
+        ctx.fillText(`${r.x}, ${r.y}  ${r.w}×${r.h}`, hx + 3, hy - 4);
         ctx.restore();
       }
 
@@ -124,7 +180,7 @@ export default function Stage() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Resize canvas to its container in CSS pixels.
+  // Resize canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -139,9 +195,64 @@ export default function Stage() {
     return () => ro.disconnect();
   }, []);
 
+  // Hitbox mouse handlers
+  const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const s = useStore.getState();
+    if (!s.showHitbox || !s.loaded) return;
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    dragRef.current = { active: true, startX: x, startY: y, curX: x, curY: y };
+  };
+
+  const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!dragRef.current.active) return;
+    const rect = canvasRef.current!.getBoundingClientRect();
+    dragRef.current.curX = e.clientX - rect.left;
+    dragRef.current.curY = e.clientY - rect.top;
+  };
+
+  const onMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    if (!drag.active) return;
+    drag.active = false;
+
+    const s = useStore.getState();
+    if (!s.loaded) return;
+    const a = s.loaded.anim;
+    const img = s.loaded.images[a.frames[s.currentFrame].src];
+    if (!img) return;
+
+    const canvas = canvasRef.current!;
+    const W = canvas.width;
+    const H = canvas.height;
+    const cx = W / 2;
+    const cy = H * 0.85;
+    const spriteX = cx - img.width * a.anchor.x;
+    const spriteY = cy - img.height * a.anchor.y;
+
+    const r = rectFromDrag(drag, spriteX, spriteY);
+    if (r.w < 4 || r.h < 4) return; // ignore accidental clicks
+    useStore.getState().updateFrame(s.currentFrame, { hitbox: r });
+  };
+
+  const showHitbox = useStore((s) => s.showHitbox);
+
   return (
     <div className="checkerboard flex-1 relative min-h-0">
-      <canvas ref={canvasRef} className="block w-full h-full" />
+      <canvas
+        ref={canvasRef}
+        className="block w-full h-full"
+        style={{ cursor: showHitbox ? 'crosshair' : 'default' }}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+      />
+      {showHitbox && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-black/60 text-amber-300 text-xs px-2.5 py-1 rounded-full pointer-events-none">
+          Drag to draw hitbox on this frame
+        </div>
+      )}
     </div>
   );
 }
