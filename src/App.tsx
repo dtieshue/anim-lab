@@ -3,6 +3,7 @@ import Stage from './Stage';
 import Timeline from './Timeline';
 import Inspector from './Inspector';
 import TransportBar from './TransportBar';
+import FilmStrip from './FilmStrip';
 import { useStore } from './store';
 import { ensurePermission, lastFolderName, loadFromDirHandle, loadFromDrop, pickFolder, readStashedHandle } from './loader';
 import { useKeyboardShortcuts } from './keyboard';
@@ -13,6 +14,7 @@ export default function App() {
   const [error, setError] = useState<string>('');
   const [dragHover, setDragHover] = useState(false);
   const [lastName, setLastName] = useState<string | null>(null);
+  const [showFilmStrip, setShowFilmStrip] = useState(false);
 
   useKeyboardShortcuts();
 
@@ -68,6 +70,15 @@ export default function App() {
           </div>
         )}
         <div className="ml-auto flex items-center gap-2 text-xs">
+          {loaded && (
+            <button
+              onClick={() => setShowFilmStrip(true)}
+              className="px-2.5 h-7 rounded-md bg-neutral-900 ring-1 ring-neutral-800 hover:ring-neutral-700 text-neutral-300 hover:text-white transition flex items-center gap-1.5"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="6" width="4" height="12" rx="1"/><rect x="8" y="6" width="4" height="12" rx="1"/><rect x="14" y="6" width="4" height="12" rx="1"/><rect x="20" y="6" width="2" height="12" rx="1"/></svg>
+              Film Strip
+            </button>
+          )}
           {lastName && (
             <button onClick={handleReopen} className="px-2.5 h-7 rounded-md bg-neutral-900 ring-1 ring-neutral-800 hover:ring-neutral-700 text-neutral-300 hover:text-white transition">
               Reopen <span className="text-neutral-500">"{lastName}"</span>
@@ -89,6 +100,8 @@ export default function App() {
         </div>
         <Inspector />
       </div>
+
+      {showFilmStrip && <FilmStrip onClose={() => setShowFilmStrip(false)} />}
 
       {!loaded && (
         <div
