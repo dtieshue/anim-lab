@@ -5,7 +5,7 @@ import Inspector from './Inspector';
 import TransportBar from './TransportBar';
 import FilmStrip from './FilmStrip';
 import { useStore } from './store';
-import { ensurePermission, lastFolderName, loadFromDirHandle, loadFromDrop, pickFolder, readStashedHandle } from './loader';
+import { ensurePermission, lastFolderName, loadFromDirHandle, loadFromDrop, loadFromFileList, pickFolder, readStashedHandle } from './loader';
 import { useKeyboardShortcuts } from './keyboard';
 
 export default function App() {
@@ -36,6 +36,19 @@ export default function App() {
     setError('');
     try { setLoaded(await pickFolder()); }
     catch (err: any) { if (err?.name !== 'AbortError') setError(err.message ?? String(err)); }
+  };
+
+  const handlePickFiles = () => {
+    setError('');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = '.png,.json';
+    input.onchange = async () => {
+      try { setLoaded(await loadFromFileList(Array.from(input.files ?? []))); }
+      catch (err: any) { setError(err.message ?? String(err)); }
+    };
+    input.click();
   };
 
   const handleReopen = async () => {
@@ -84,6 +97,9 @@ export default function App() {
               Reopen <span className="text-neutral-500">"{lastName}"</span>
             </button>
           )}
+          <button onClick={handlePickFiles} className="px-2.5 h-7 rounded-md bg-neutral-900 ring-1 ring-neutral-800 hover:ring-neutral-700 text-neutral-200 hover:text-white transition">
+            Open files…
+          </button>
           <button onClick={handlePick} className="px-2.5 h-7 rounded-md bg-neutral-900 ring-1 ring-neutral-800 hover:ring-neutral-700 text-neutral-200 hover:text-white transition">
             Open folder…
           </button>
@@ -118,9 +134,15 @@ export default function App() {
             <div className="text-sm text-neutral-400 mb-5">
               PNGs only, or PNGs + <code className="text-neutral-200">anim.json</code>
             </div>
-            <button onClick={handlePick} className="px-3.5 h-8 rounded-md bg-violet-500 hover:bg-violet-400 text-sm font-medium text-white transition-colors">
-              Or pick a folder
-            </button>
+            <div className="flex items-center gap-2 justify-center">
+              <button onClick={handlePickFiles} className="px-3.5 h-8 rounded-md bg-violet-500 hover:bg-violet-400 text-sm font-medium text-white transition-colors">
+                Select images…
+              </button>
+              <span className="text-neutral-600 text-sm">or</span>
+              <button onClick={handlePick} className="px-3.5 h-8 rounded-md bg-neutral-800 hover:bg-neutral-700 ring-1 ring-neutral-700 text-sm text-neutral-200 transition-colors">
+                Pick a folder
+              </button>
+            </div>
           </div>
         </div>
       )}
