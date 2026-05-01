@@ -231,6 +231,18 @@ export async function ensurePermission(handle: FileSystemDirectoryHandle, mode: 
   return r === 'granted';
 }
 
+// Append PNGs to an already-loaded folder. They go into `images` only —
+// callers must explicitly add them to `anim.frames` (e.g., via the staging row).
+export async function loadAdditionalImages(files: File[]): Promise<Record<string, HTMLImageElement>> {
+  const out: Record<string, HTMLImageElement> = {};
+  for (const f of files) {
+    if (!f.name.toLowerCase().endsWith('.png')) continue;
+    const base = f.name.split('/').pop()!;
+    out[base] = await loadImage(f);
+  }
+  return out;
+}
+
 export async function saveAnimJson(loaded: LoadedFolder): Promise<void> {
   if (!loaded.dirHandle) throw new Error('No folder handle (load via FSA to enable save)');
   const ok = await ensurePermission(loaded.dirHandle, 'readwrite');

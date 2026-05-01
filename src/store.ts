@@ -27,12 +27,25 @@ interface State {
   setShowSilhouette: (b: boolean) => void;
   setShowHitbox: (b: boolean) => void;
 
+  // view (zoom/pan)
+  viewScale: number;
+  viewPanX: number;
+  viewPanY: number;
+  setView: (v: { scale?: number; panX?: number; panY?: number }) => void;
+  resetView: () => void;
+  zoomAt: (factor: number, screenX: number, screenY: number) => void;
+
   setFrameElapsedMs: (ms: number) => void;
 
   // mutators
   updateAnim: (patch: Partial<Anim>) => void;
   updateFrame: (i: number, patch: Partial<FrameDef>) => void;
   updateEvent: (name: string, patch: Partial<EventDef>) => void;
+
+  // staging / image management
+  addImages: (newImages: Record<string, HTMLImageElement>) => void;
+  addStagedFrame: (src: string) => void;
+  removeFrame: (i: number) => void;
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -46,6 +59,10 @@ export const useStore = create<State>((set, get) => ({
   showAnchor: true,
   showSilhouette: false,
   showHitbox: false,
+
+  viewScale: 1,
+  viewPanX: 0,
+  viewPanY: 0,
 
   setLoaded: (l) => set({ loaded: l, currentFrame: 0, frameElapsedMs: 0, selectedFrame: 0, playing: false }),
   setPlaying: (p) => set({ playing: p }),
@@ -71,6 +88,27 @@ export const useStore = create<State>((set, get) => ({
   setShowSilhouette: (b) => set({ showSilhouette: b }),
   setShowHitbox: (b) => set({ showHitbox: b }),
 
+  setView: (v) =>
+    set((s) => ({
+      viewScale: v.scale ?? s.viewScale,
+      viewPanX: v.panX ?? s.viewPanX,
+      viewPanY: v.panY ?? s.viewPanY,
+    })),
+  resetView: () => set({ viewScale: 1, viewPanX: 0, viewPanY: 0 }),
+  zoomAt: (factor, sx, sy) =>
+    set((s) => {
+      const newScale = Math.max(0.1, Math.min(8, s.viewScale * factor));
+      // keep the world point under (sx, sy) fixed: world = (screen - pan) / scale
+      // newPan = screen - world * newScale
+      const worldX = (sx - s.viewPanX) / s.viewScale;
+      const worldY = (sy - s.viewPanY) / s.viewScale;
+      return {
+        viewScale: newScale,
+        viewPanX: sx - worldX * newScale,
+        viewPanY: sy - worldY * newScale,
+      };
+    }),
+
   setFrameElapsedMs: (ms) => set({ frameElapsedMs: ms }),
 
   updateAnim: (patch) =>
@@ -90,6 +128,35 @@ export const useStore = create<State>((set, get) => ({
       if (!s.loaded) return {};
       const events = { ...s.loaded.anim.events, [name]: { ...s.loaded.anim.events[name], ...patch } };
       return { loaded: { ...s.loaded, anim: { ...s.loaded.anim, events } } };
+    }),
+
+  addImages: (newImages) =>
+    set((s) => {
+      if (!s.loaded) return {};
+      const images = { ...s.loaded.images, ...newImages };
+      return { loaded: { ...s.loaded, images } };
+    }),
+
+  addStagedFrame: (src) =>
+    set((s) => {
+      if (!s.loaded) return {};
+      const frames = [...s.loaded.anim.frames, { src, duration: 1, phase: 'anticipation' as const }];
+      return { loaded: { ...s.loaded, anim: { ...s.loaded.anim, frames } } };
+    }),
+
+  removeFrame: (i) =>
+    set((s) => {
+      if (!s.loaded) return {};
+      const frames = s.loaded.anim.frames.filter((_, idx) => idx !== i);
+      if (frames.length === 0) return {}; // don't allow removing last frame
+      const cur = Math.min(s.currentFrame, frames.length - 1);
+      const sel = Math.min(s.selectedFrame, frames.length - 1);
+      return {
+        loaded: { ...s.loaded, anim: { ...s.loaded.anim, frames } },
+        currentFrame: cur,
+        selectedFrame: sel,
+        frameElapsedMs: 0,
+      };
     }),
 }));
 

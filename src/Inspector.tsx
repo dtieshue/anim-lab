@@ -9,6 +9,7 @@ export default function Inspector() {
   const updateAnim = useStore((s) => s.updateAnim);
   const updateFrame = useStore((s) => s.updateFrame);
   const updateEvent = useStore((s) => s.updateEvent);
+  const removeFrame = useStore((s) => s.removeFrame);
 
   const [saveMsg, setSaveMsg] = useState<string>('');
 
@@ -56,7 +57,20 @@ export default function Inspector() {
       </Section>
 
       <Section title={`Frame ${selectedFrame}`} accent={PHASE_COLORS[frame.phase]}>
-        <Row label="Source"><span className="text-neutral-400 truncate text-xs">{frame.src}</span></Row>
+        <Row label="Source">
+          <div className="flex items-center gap-2">
+            <span className="text-neutral-400 truncate text-xs">{frame.src}</span>
+            {a.frames.length > 1 && (
+              <button
+                onClick={() => removeFrame(selectedFrame)}
+                title="Remove this frame from the animation (image stays in staging)"
+                className="text-[10px] text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-1.5 py-0.5 rounded transition-colors"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </Row>
         <Row label="Phase">
           <select
             value={frame.phase}
