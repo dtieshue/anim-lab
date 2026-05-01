@@ -66,7 +66,7 @@ export default function Stage() {
       if (!img) { raf = requestAnimationFrame(draw); return; }
 
       const cx = W / 2 + shakeX;
-      const cy = H * 0.85 + shakeY;
+      const cy = H / 2 + shakeY;
       const spriteX = cx - img.width * a.anchor.x;
       const spriteY = cy - img.height * a.anchor.y;
       const invScale = 1 / s.viewScale;
@@ -114,6 +114,18 @@ export default function Stage() {
         ctx.fillText(text, 0, 0);
         ctx.restore();
       };
+
+      // Dashed frame bounds outline (always visible — shows current PNG bounds)
+      {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        ctx.lineWidth = 1 * invScale;
+        ctx.setLineDash([5 * invScale, 4 * invScale]);
+        ctx.strokeRect(spriteX, spriteY, img.width, img.height);
+        ctx.setLineDash([]);
+        ctx.restore();
+        drawText(`${img.width}×${img.height}`, spriteX + 3, spriteY - 4, 'rgba(255,255,255,0.55)');
+      }
 
       // Committed hitbox
       if (s.showHitbox && frame.hitbox) {
@@ -213,8 +225,18 @@ export default function Stage() {
       const rect = canvas.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
-      const factor = Math.exp(-e.deltaY * 0.0015);
-      useStore.getState().zoomAt(factor, sx, sy);
+      // Trackpad pinch-to-zoom and Ctrl/Cmd+wheel both arrive with ctrlKey/metaKey set.
+      // Plain two-finger swipe arrives without modifiers → pan.
+      if (e.ctrlKey || e.metaKey) {
+        const factor = Math.exp(-e.deltaY * 0.01);
+        useStore.getState().zoomAt(factor, sx, sy);
+      } else {
+        const s = useStore.getState();
+        useStore.getState().setView({
+          panX: s.viewPanX - e.deltaX,
+          panY: s.viewPanY - e.deltaY,
+        });
+      }
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => canvas.removeEventListener('wheel', onWheel);
@@ -255,7 +277,7 @@ export default function Stage() {
     if (s.showAnchor) {
       const canvas = canvasRef.current!;
       const cx = canvas.width / 2;
-      const cy = canvas.height * 0.85;
+      const cy = canvas.height / 2;
       const dx = world.x - cx, dy = world.y - cy;
       if (Math.sqrt(dx * dx + dy * dy) <= ANCHOR_HIT_RADIUS_WORLD) {
         dragRef.current = { kind: 'anchor', active: true };
@@ -294,7 +316,7 @@ export default function Stage() {
       const img = s.loaded.images[a.frames[s.currentFrame].src];
       if (!img) return;
       const spriteX = W / 2 - img.width * a.anchor.x;
-      const spriteY = H * 0.85 - img.height * a.anchor.y;
+      const spriteY = H / 2 - img.height * a.anchor.y;
       const newAx = Math.max(0, Math.min(1, (world.x - spriteX) / img.width));
       const newAy = Math.max(0, Math.min(1, (world.y - spriteY) / img.height));
       s.updateAnim({ anchor: { x: Math.round(newAx * 100) / 100, y: Math.round(newAy * 100) / 100 } });
@@ -326,7 +348,7 @@ export default function Stage() {
       const canvas = canvasRef.current!;
       const W = canvas.width, H = canvas.height;
       const spriteX = W / 2 - img.width * a.anchor.x;
-      const spriteY = H * 0.85 - img.height * a.anchor.y;
+      const spriteY = H / 2 - img.height * a.anchor.y;
       const r = rectFromDrag(drag, spriteX, spriteY);
       if (r.w < 4 || r.h < 4) { dragRef.current = { kind: 'none' }; return; }
       s.updateFrame(s.currentFrame, { hitbox: r });
@@ -388,7 +410,7 @@ export default function Stage() {
 
       {/* Status hints */}
       <div className="absolute bottom-2 left-3 text-[10px] text-neutral-500 pointer-events-none select-none">
-        scroll = zoom · alt + drag or middle-click = pan
+        two-finger swipe = pan · ⌘/ctrl + swipe = zoom · alt-drag or middle-click = pan
       </div>
 
       {showHitbox && !showAnchor && (

@@ -46,6 +46,7 @@ interface State {
   addImages: (newImages: Record<string, HTMLImageElement>) => void;
   addStagedFrame: (src: string) => void;
   removeFrame: (i: number) => void;
+  reorderFrame: (from: number, to: number) => void;
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -155,6 +156,30 @@ export const useStore = create<State>((set, get) => ({
         loaded: { ...s.loaded, anim: { ...s.loaded.anim, frames } },
         currentFrame: cur,
         selectedFrame: sel,
+        frameElapsedMs: 0,
+      };
+    }),
+
+  reorderFrame: (from, to) =>
+    set((s) => {
+      if (!s.loaded) return {};
+      const frames = s.loaded.anim.frames.slice();
+      if (from < 0 || from >= frames.length) return {};
+      const clampedTo = Math.max(0, Math.min(frames.length - 1, to));
+      if (from === clampedTo) return {};
+      const [moved] = frames.splice(from, 1);
+      frames.splice(clampedTo, 0, moved);
+      // Track the moved frame's new index for current/selected
+      const remap = (idx: number) => {
+        if (idx === from) return clampedTo;
+        if (from < idx && clampedTo >= idx) return idx - 1;
+        if (from > idx && clampedTo <= idx) return idx + 1;
+        return idx;
+      };
+      return {
+        loaded: { ...s.loaded, anim: { ...s.loaded.anim, frames } },
+        currentFrame: remap(s.currentFrame),
+        selectedFrame: remap(s.selectedFrame),
         frameElapsedMs: 0,
       };
     }),

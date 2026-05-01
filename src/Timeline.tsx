@@ -14,10 +14,12 @@ export default function Timeline() {
   const updateFrame = useStore((s) => s.updateFrame);
   const addImages = useStore((s) => s.addImages);
   const addStagedFrame = useStore((s) => s.addStagedFrame);
+  const reorderFrame = useStore((s) => s.reorderFrame);
 
   const [drag, setDrag] = useState<{ index: number; startX: number; startDur: number } | null>(null);
   const [stagingOpen, setStagingOpen] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [reorderDrag, setReorderDrag] = useState<{ from: number; over: number | null } | null>(null);
 
   useEffect(() => {
     if (!drag) return;
@@ -120,8 +122,17 @@ export default function Timeline() {
               totalFrames={totalFrames}
               currentFrame={currentFrame}
               selectedFrame={selectedFrame}
+              reorderDrag={reorderDrag}
               onSelect={(i) => { setCurrentFrame(i); selectFrame(i); }}
               onResizeStart={(i, e) => setDrag({ index: i, startX: e.clientX, startDur: a.frames[i].duration })}
+              onReorderStart={(i) => setReorderDrag({ from: i, over: i })}
+              onReorderOver={(i) => setReorderDrag((d) => d ? { ...d, over: i } : null)}
+              onReorderEnd={() => {
+                if (reorderDrag && reorderDrag.over != null && reorderDrag.over !== reorderDrag.from) {
+                  reorderFrame(reorderDrag.from, reorderDrag.over);
+                }
+                setReorderDrag(null);
+              }}
             />
           ))}
 
@@ -242,7 +253,8 @@ function StagedThumb({ src, img, onClick }: { src: string; img?: HTMLImageElemen
 }
 
 function PhaseTrack({
-  phase, frames, offsets, totalFrames, currentFrame, selectedFrame, onSelect, onResizeStart,
+  phase, frames, offsets, totalFrames, currentFrame, selectedFrame, reorderDrag,
+  onSelect, onResizeStart, onReorderStart, onReorderOver, onReorderEnd,
 }: {
   phase: Phase;
   frames: { phase: Phase; duration: number; event?: string; src: string }[];
@@ -250,8 +262,12 @@ function PhaseTrack({
   totalFrames: number;
   currentFrame: number;
   selectedFrame: number;
+  reorderDrag: { from: number; over: number | null } | null;
   onSelect: (i: number) => void;
   onResizeStart: (i: number, e: React.MouseEvent) => void;
+  onReorderStart: (i: number) => void;
+  onReorderOver: (i: number) => void;
+  onReorderEnd: () => void;
 }) {
   return (
     <div className="flex items-center gap-2 mb-1">
@@ -266,9 +282,24 @@ function PhaseTrack({
         {frames.map((f, i) => f.phase !== phase ? null : (
           <div
             key={i}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = 'move';
+              try { e.dataTransfer.setData('text/plain', String(i)); } catch {}
+              onReorderStart(i);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+              if (reorderDrag && reorderDrag.from !== i) onReorderOver(i);
+            }}
+            onDragEnd={onReorderEnd}
+            onDrop={(e) => { e.preventDefault(); onReorderEnd(); }}
             onClick={() => onSelect(i)}
-            title={`${i}: ${f.duration}f${f.event ? ` · ${f.event}` : ''}`}
-            className={`absolute top-0.5 bottom-0.5 rounded cursor-pointer transition-shadow ${
+            title={`${i}: ${f.duration}f${f.event ? ` · ${f.event}` : ''} · drag to reorder`}
+            className={`absolute top-0.5 bottom-0.5 rounded cursor-grab active:cursor-grabbing transition-shadow ${
+              reorderDrag?.from === i ? 'opacity-50' : ''
+            } ${
               i === currentFrame ? 'shadow-[inset_0_0_0_2px_rgba(255,255,255,0.95)]'
               : i === selectedFrame ? 'shadow-[inset_0_0_0_1.5px_rgba(255,255,255,0.55)]'
               : 'hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)]'
@@ -281,9 +312,18 @@ function PhaseTrack({
           >
             <div className="px-1.5 text-[10px] font-medium text-black/75 leading-6 truncate select-none">{i}</div>
             <div
+              draggable={false}
               className="absolute top-0 right-0 bottom-0 w-1.5 cursor-ew-resize bg-black/0 hover:bg-black/40"
               onMouseDown={(e) => { e.stopPropagation(); onResizeStart(i, e); }}
+              onDragStart={(e) => e.preventDefault()}
             />
+            {/* drop indicator */}
+            {reorderDrag && reorderDrag.over === i && reorderDrag.from !== i && (
+              <div
+                className="absolute top-[-3px] bottom-[-3px] w-0.5 bg-violet-300 pointer-events-none"
+                style={{ [reorderDrag.from < i ? 'right' : 'left']: -1 } as React.CSSProperties}
+              />
+            )}
           </div>
         ))}
       </div>
